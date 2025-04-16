@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Camera Grid View</title>
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      display: flex;
+      height: 100vh;
+      font-family: sans-serif;
+    }
+
+    #sidebar {
+      width: 220px;
+      background-color: #f0f0f0;
+      padding: 15px;
+      box-sizing: border-box;
+      overflow-y: auto;
+      border-right: 1px solid #ccc;
+    }
+
+    #sidebar h3 {
+      margin-top: 0;
+      font-size: 18px;
+    }
+
+    #grid {
+      flex: 1;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: repeat(3, 1fr);
+      gap: 5px;
+      background: #111;
+      padding: 5px;
+      box-sizing: border-box;
+    }
+
+    .grid-cell {
+      background-color: black;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .grid-cell img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 10px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="sidebar">
+    <h3>Chọn camera để hiển thị:</h3>
+    <div id="cameraCheckboxes"></div>
+  </div>
+
+  <div id="grid"></div>
+
+  <script>
+    const grid = document.getElementById('grid');
+    const checkboxContainer = document.getElementById('cameraCheckboxes');
+    let client;
+    const subscribed = {};
+
+    client = mqtt.connect('ws://172.20.10.5:9003');
+
+    client.on('connect', () => console.log("🟢 MQTT connected"));
+    client.on('error', err => console.error("❌ MQTT error:", err));
+    client.on('offline', () => console.warn("⚠️ MQTT offline"));
+    client.on('reconnect', () => console.log("🔁 MQTT reconnecting..."));
+
+    client.on('message', (topic, message) => {
+      const cam = topic.split('/')[1];
+      const imgEl = document.getElementById(`img-${cam}`);
+      if (imgEl) {
+        imgEl.src = message.toString() + '?t=' + Date.now();
+      }
+    });
+
+    fetch("http://172.20.10.5:5005/cameras")
+      .then(res => res.json())
+      .then(data => {
+        for (const cam_id in data) {
+          const label = document.createElement('label');
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.value = cam_id;
+          checkbox.addEventListener('change', (e) => handleToggle(cam_id, e.target.checked));
+          label.appendChild(checkbox);
+          label.appendChild(document.createTextNode(` ${data[cam_id].name}`));
+          checkboxContainer.appendChild(label);
+        }
+      });
+
+    function handleToggle(cam_id, isChecked) {
+      if (isChecked) {
+        if (subscribed[cam_id]) return;
+
+        const cell = document.createElement('div');
+        cell.className = 'grid-cell';
+        cell.id = `cell-${cam_id}`;
+        const img = document.createElement('img');
+        img.id = `img-${cam_id}`;
+        img.alt = cam_id;
+        img.src = '';
+        cell.appendChild(img);
+        grid.appendChild(cell);
+
+        client.subscribe(`camera/${cam_id}`, err => {
+          if (!err) {
+            subscribed[cam_id] = true;
+            console.log(`🟢 Subscribed to camera/${cam_id}`);
+          } else {
+            console.error(`❌ Failed to subscribe camera/${cam_id}`, err);
+          }
+        });
+      } else {
+        if (!subscribed[cam_id]) return;
+
+        client.unsubscribe(`camera/${cam_id}`, err => {
+          if (!err) {
+            delete subscribed[cam_id];
+            console.log(`🟡 Unsubscribed from camera/${cam_id}`);
+          } else {
+            console.error(`❌ Failed to unsubscribe camera/${cam_id}`, err);
+          }
+        });
+
+        const cell = document.getElementById(`cell-${cam_id}`);
+        if (cell) cell.remove();
+      }
+    }
+  </script>
+</body>
+
+</html>
