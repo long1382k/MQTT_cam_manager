@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>MQTT Admin Monitor</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; background: #f5f5f5; }
+    pre { background: #fff; padding: 15px; border: 1px solid #ddd; overflow-x: auto; }
+  </style>
+</head>
+<body>
+  <h1>MQTT Client Monitor</h1>
+  <button onclick="fetchStatus()">🔄 Refresh</button>
+  <pre id="output">Loading...</pre>
+
+  <script>
+    async function fetchStatus() {
+      const res = await fetch("http://172.20.10.5:5005/admin/status");
+      const data = await res.json();
+      document.getElementById("output").textContent = JSON.stringify(data, null, 2);
+    }
+    fetchStatus();
+  </script>
+</body>
+</html>
